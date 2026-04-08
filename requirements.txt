@@ -3,6 +3,7 @@ uvicorn
 pydantic
 openai
 tiktoken
+faiss-cpu
 
 tree-sitter>=0.22
 tree-sitter-python

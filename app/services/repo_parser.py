@@ -304,7 +304,7 @@ class RepoParser:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_name = os.path.basename(repo_url).replace(".git", "")
             repo_path = os.path.join(tmpdir, repo_name)
-            subprocess.run(["git", "clone", repo_url, repo_path], check=True)
+            subprocess.run(["git", "clone", "--depth", "1", repo_url, repo_path], check=True)
 
             chunks: list[ParsedChunk] = []
 
