@@ -6,7 +6,7 @@ class LLMService:
 
     def generate_response(self, prompt: str) -> str:
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=512,
         )

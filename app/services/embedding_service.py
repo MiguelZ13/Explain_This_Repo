@@ -85,6 +85,5 @@ class EmbeddingService:
                         "chunk_total":  len(text_chunks),
                     },
                 })
-                store.add(vector, chunk_text, metadata)
 
         return results

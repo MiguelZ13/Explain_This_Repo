@@ -35,6 +35,22 @@ class VectorStore:
             self._index = faiss.read_index(self._index_path)
         else:
             self._index = faiss.IndexFlatIP(EMBEDDING_DIM)
+    
+    def add_repo(
+        self,
+        repo_name: str,
+        repo_path: str
+    ) -> None:
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO repos 
+                    (repo_name, repo_path)
+                VALUES 
+                    (:repo_name, :repo_path)
+                """,
+                {"repo_name": repo_name, "repo_path": repo_path}
+            )
 
     def add(
         self,
@@ -77,7 +93,7 @@ class VectorStore:
                     (:text, :file_path, :language, :chunk_type, :name, :docstring,
                      :start_line, :end_line, :chunk_index, :chunk_total, :extra_json)
                 """,
-                rows,
+                rows
             )
 
             first_rowid = cursor.lastrowid - len(rows) + 1
