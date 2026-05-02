@@ -3,7 +3,7 @@ import os
 import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
-from tree_sitter import Language, Parser, Node
+from tree_sitter import Language, Parser, Node, QueryCursor, Query
 
 
 def _load_languages() -> dict[str, Language]:
@@ -370,12 +370,13 @@ class RepoParser:
 
         for chunk_type, query_str in queries:
             try:
-                query = LANGUAGES[language].query(query_str)
+                query = Query(LANGUAGES[language], query_str)
             except Exception:
                 print(f"Warning: Failed to compile query for {language} - {chunk_type}")
                 continue
-
-            matches = query.matches(tree.root_node)
+            
+            cursor = QueryCursor(query)
+            matches = cursor.matches(tree.root_node)
 
             for _pattern_index, capture_dict in matches:
                 def_nodes: list[Node] = capture_dict.get("definition", [])
