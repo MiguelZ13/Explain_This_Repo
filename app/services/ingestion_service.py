@@ -21,10 +21,11 @@ class IngestionService:
         
         embeddings = self.embedder._embed_chunks(texts)
         
-        self.store.add_repo(repo_name, repo_path)
+        repo_id = self.store.get_or_create_repo(repo_name, repo_path)
         for embedding, item in zip(embeddings, chunks_with_metadata):
             self.store.add(
                 vector=embedding,
                 text=item["content"],
+                repo_id=repo_id,
                 metadata={k: v for k, v in item.items() if k != "content"}
             )

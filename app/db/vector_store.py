@@ -35,14 +35,18 @@ class VectorStore:
             self._index = faiss.read_index(self._index_path)
         else:
             self._index = faiss.IndexFlatIP(EMBEDDING_DIM)
-    
-    def add_repo(
-        self,
-        repo_name: str,
-        repo_path: str
-    ) -> None:
+        
+    def get_or_create_repo(self, repo_name: str, repo_path: str) -> int:
+        row = self._conn.execute(
+            "SELECT id FROM repos WHERE repo_name = ?",
+            (repo_name,)
+        ).fetchone()
+
+        if row:
+            return row["id"]
+
         with self._conn:
-            self._conn.execute(
+            cursor = self._conn.execute(
                 """
                 INSERT INTO repos 
                     (repo_name, repo_path)
@@ -51,19 +55,13 @@ class VectorStore:
                 """,
                 {"repo_name": repo_name, "repo_path": repo_path}
             )
-
-    def add(
-        self,
-        vector:   list[float],
-        text:     str,
-        metadata: dict | None = None,
-    ) -> None:
-        self.add_batch([vector], [text], [metadata or {}])
+        return cursor.lastrowid
 
     def add_batch(
         self,
         vectors:   list[list[float]],
         texts:     list[str],
+        repo_id:     int,
         metadatas: list[dict] | None = None,
     ) -> None:
         if not vectors:
@@ -76,21 +74,27 @@ class VectorStore:
             raise ValueError("vectors, texts, and metadatas must be the same length")
 
         arr = np.array(vectors, dtype=np.float32)
+        if arr.shape[1] != EMBEDDING_DIM:
+            raise ValueError(f"Each vector must have dimension {EMBEDDING_DIM}")
+        
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1, norms)
         arr /= norms
 
-        rows = [self._metadata_to_row(text, meta)
-                for text, meta in zip(texts, metadatas)]
+
+        rows = [
+            {**self._metadata_to_row(text, meta), "repo_id": repo_id  }
+            for text, meta in zip(texts, metadatas)
+        ]
 
         with self._conn:
             cursor = self._conn.executemany(
                 """
                 INSERT INTO chunks
-                    (text, file_path, language, chunk_type, name, docstring,
+                    (repo_id, text, file_path, language, chunk_type, name, docstring,
                      start_line, end_line, chunk_index, chunk_total, extra_json)
                 VALUES
-                    (:text, :file_path, :language, :chunk_type, :name, :docstring,
+                    (:repo_id, :text, :file_path, :language, :chunk_type, :name, :docstring,
                      :start_line, :end_line, :chunk_index, :chunk_total, :extra_json)
                 """,
                 rows
@@ -146,9 +150,17 @@ class VectorStore:
         return results
 
     def get_by_repo(self, repo_name: str) -> list[dict]:
+        repo = self._conn.execute(
+            "SELECT id FROM repos WHERE repo_name = ?",
+            (repo_name,)
+        ).fetchone()
+
+        if not repo:
+            return []
+
         rows = self._conn.execute(
-            "SELECT * FROM chunks WHERE file_path LIKE ?",
-            (f"{repo_name}/%",)
+            "SELECT * FROM chunks WHERE repo_id = ?",
+            (repo["id"],)
         ).fetchall()
         return [{"text": r["text"], "metadata": self._row_to_metadata(r)} for r in rows]
 
