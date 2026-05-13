@@ -1,12 +1,12 @@
-from app.db.vector_store import VectorStore
 from app.services.embedding_service import EmbeddingService
 from app.services.repo_parser import RepoParser
+from app.db.vector_store import VectorStore
 
 class IngestionService:
-    def __init__(self, store: VectorStore, embedder: EmbeddingService, parser: RepoParser):
+    def __init__(self, store: VectorStore):
         self.store = store
-        self.embedder = embedder
-        self.parser = parser
+        self.embedder = EmbeddingService()
+        self.parser = RepoParser()
     
     def ingest_repo(self, repo_path: str) -> None:
         data = self.parser.parse_repo(repo_path)

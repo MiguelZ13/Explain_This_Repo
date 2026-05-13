@@ -1,10 +1,9 @@
-from fastapi import APIRouter
-from app.services.rag_service import RAGService
+from fastapi import APIRouter, Depends
+from app.api.deps import get_rag_service
+
 
 router = APIRouter()
-rag_service = RAGService()
-
 @router.post("/")
-async def query_repo(query: str):
-    response = rag_service.query(query)
+async def query_repo(query: str, rag = Depends(get_rag_service)):
+    response = rag.query(query)
     return {"response": response}
