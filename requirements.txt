@@ -1,9 +1,10 @@
 fastapi
 uvicorn
 pydantic
-openai
-tiktoken
 faiss-cpu
+sentence_transformers
+torch
+transformers
 
 tree-sitter>=0.22
 tree-sitter-python

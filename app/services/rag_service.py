@@ -10,7 +10,7 @@ class RAGService:
         
 
     def process_query(self, query: str) -> str:
-        embedding = self.embedder.generate_embedding(query)
+        embedding = self.embedder.generate_embedding_for_query(query)
         context = self.store.search(embedding)
         response = self.llm.generate_response(query, context)
         return response
