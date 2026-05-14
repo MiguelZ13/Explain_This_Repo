@@ -41,7 +41,7 @@ class EmbeddingService:
         return embeddings.tolist()
 
     # Designed for simple text inputs where we just want to generate an embedding for the entire text (used for queries).
-    def generate_embedding_for_query(self, text: str) -> list[list[float]]:
+    def generate_embedding_for_query(self, text: str) -> list[float]:
         if not text:
             return []
         

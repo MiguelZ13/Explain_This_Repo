@@ -4,7 +4,7 @@ import sqlite3
 import numpy as np
 import faiss
 
-EMBEDDING_DIM = 1536 # for OpenAI's text-embedding-3-small
+EMBEDDING_DIM = 768 # for BAAI's bge-base-en-v1.5
 DEFAULT_TOP_K = 5
 
 # Known metadata keys that get their own column in the schema.

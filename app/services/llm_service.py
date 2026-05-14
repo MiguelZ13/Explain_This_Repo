@@ -1,5 +1,7 @@
-import openai
-MODEL             = "gpt-4o"
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+MODEL             = "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
 MAX_TOKENS        = 2048
 TEMPERATURE       = 0.2
 MAX_CONTEXT_CHARS = 12_000
@@ -16,60 +18,54 @@ or behaviours that are not present in the context."""
 class LLMService:
 
     def __init__(self):
-        self.client = openai.OpenAI()
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            MODEL,
+            trust_remote_code=True
+        )
+        self.model = AutoModelForCausalLM.from_pretrained(
+            MODEL,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            device_map="auto"
+        )
+        self.model.eval()
+        
+    def _build_inputs(self, query: str, context: list[dict]):
+        context_block = self._build_context_block(context)
+        prompt = self._build_prompt(query, context_block)
+        
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ]
+        
+        input_ids = self.tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            return_tensors="pt"
+        ).to(self.model.device)
+        
+        return input_ids
 
     def generate_response(
         self,
         query:    str,
         context:  list[dict],
     ) -> str:
-        context_block = self._build_context_block(context)
-        prompt        = self._build_prompt(query, context_block)
-
-        try:
-            response = self.client.chat.completions.create(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user",   "content": prompt},
-                ],
-                max_tokens=MAX_TOKENS,
+        input_ids = self._build_inputs(query, context)
+        
+        with torch.no_grad():
+            output_ids = self.model.generate(
+                input_ids,
+                max_new_tokens=MAX_TOKENS,
                 temperature=TEMPERATURE,
+                do_sample=TEMPERATURE > 0,
+                pad_token_id=self.tokenizer.eos_token_id,
             )
-            return response.choices[0].message.content.strip()
-
-        except openai.RateLimitError as e:
-            raise RuntimeError("OpenAI rate limit reached — retry after a moment.") from e
-        except openai.APIStatusError as e:
-            raise RuntimeError(f"OpenAI API error {e.status_code}: {e.message}") from e
-
-    def generate_response_streamed(
-        self,
-        query:   str,
-        context: list[dict],
-    ):
-        context_block = self._build_context_block(context)
-        prompt        = self._build_prompt(query, context_block)
-
-        try:
-            with self.client.chat.completions.stream(
-                model=MODEL,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user",   "content": prompt},
-                ],
-                max_tokens=MAX_TOKENS,
-                temperature=TEMPERATURE,
-            ) as stream:
-                for text in stream.text_stream:
-                    yield text
-
-        except openai.RateLimitError as e:
-            raise RuntimeError("OpenAI rate limit reached — retry after a moment.") from e
-        except openai.APIStatusError as e:
-            raise RuntimeError(f"OpenAI API error {e.status_code}: {e.message}") from e
-
-
+        
+        generated = output_ids[0][input_ids.shape[-1]:]
+        return self.tokenizer.decode(generated, skip_special_tokens=True).strip()
+        
     def _build_context_block(self, context: list[dict]) -> str:
         if not context:
             return "No relevant context was found in the repository."
