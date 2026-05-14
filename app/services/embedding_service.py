@@ -1,20 +1,17 @@
-from openai import OpenAI
-import tiktoken
-from app.db.vector_store import VectorStore
+from sentence_transformers import SentenceTransformer
 
-MODEL = "text-embedding-3-small"
-MAX_TOKENS = 8191  # Max tokens for text-embedding-3-small
+MODEL = "BAAI/bge-base-en-v1.5"
 TARGET_TOKENS = 512
 OVERLAP_TOKENS = 64 
 
 class EmbeddingService:
     def __init__(self):
-        self.client = OpenAI()
-        self._tokenizer = tiktoken.encoding_for_model(MODEL)
+        self.model = SentenceTransformer(MODEL)
+        self._tokenizer = self.model.tokenizer
     
     def _chunk_text(self, text: str, chunk_size: int = TARGET_TOKENS, overlap: int = OVERLAP_TOKENS) -> list[str]:
         # Tokenizes the text and splits it into chunks of approximately chunk_size tokens with overlap
-        tokens = self._tokenizer.encode(text)
+        tokens = self._tokenizer.encode(text, add_special_tokens=False)
 
         if not tokens:
             return []
@@ -29,7 +26,7 @@ class EmbeddingService:
         while start < len(tokens):
             end = min(start + chunk_size, len(tokens))
             chunk_tokens = tokens[start:end]
-            chunks.append(self._tokenizer.decode(chunk_tokens))
+            chunks.append(self._tokenizer.decode(chunk_tokens, skip_special_tokens=True))
             if end == len(tokens):
                 break
             start += chunk_size - overlap
@@ -40,29 +37,23 @@ class EmbeddingService:
         if not chunks:
             return []
 
-        response = self.client.embeddings.create(
-            input=chunks,
-            model=MODEL,
-        )
-
-        return [item.embedding for item in response.data]
+        embeddings = self.model.encode(chunks, normalize_embeddings=True)
+        return embeddings.tolist()
 
     # Designed for simple text inputs where we just want to generate an embedding for the entire text (used for queries).
     def generate_embedding_for_query(self, text: str) -> list[list[float]]:
         if not text:
             return []
         
-        response = self.client.embeddings.create(
-            input=[text],
-            model=MODEL,
-        )
-        return response.data[0].embedding
+        prefixed = f"Represent this sentence for searching relevant passages: {text}"
+        embedding = self.model.encode([prefixed], normalize_embeddings=True)
+        return embedding[0].tolist()
     
     # This method is designed to take the parsed chunks from the RepoParser, which include both content and metadata, 
     # and generate embeddings for each chunk while preserving the associated metadata. 
     # The resulting list of dictionaries includes: original content, its embedding vector, and metadata that 
     # also indicates the chunk's position within the original content.
-    def generate_embedding_for_parsed_chunks(self, chunks: list[dict], store: VectorStore) -> list[dict]:
+    def generate_embedding_for_parsed_chunks(self, chunks: list[dict]) -> list[dict]:
         results: list[dict] = []
 
         for chunk in chunks:
